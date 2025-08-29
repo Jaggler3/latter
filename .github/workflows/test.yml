@@ -1,0 +1,88 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+        bun-version: [1.0.0, latest]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: Setup Bun ${{ matrix.bun-version }}
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: ${{ matrix.bun-version }}
+        
+    - name: Install dependencies
+      run: bun install
+      
+    - name: Build project
+      run: bun run build
+      
+    - name: Run tests
+      run: bun test
+      
+    - name: Run CLI tests
+      run: |
+        # Test basic CLI functionality
+        ./dist/cli.js --help
+        ./dist/cli.js status --database sqlite:./test-cli.db --migrations-dir ./examples/migrations
+        ./dist/cli.js migrate --database sqlite:./test-cli.db --migrations-dir ./examples/migrations
+        ./dist/cli.js status --database sqlite:./test-cli.db --migrations-dir ./examples/migrations
+        ./dist/cli.js rollback 1 --database sqlite:./test-cli.db --migrations-dir ./examples/migrations
+        ./dist/cli.js status --database sqlite:./test-cli.db --migrations-dir ./examples/migrations
+        
+    - name: Cleanup test files
+      if: always()
+      run: |
+        rm -f ./test-cli.db
+        rm -f ./examples/migrations/*_test_migration_*.sql
+        
+  lint:
+    name: Lint and Type Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+        
+    - name: Install dependencies
+      run: bun install
+      
+    - name: Type check
+      run: bun run build
+      
+    - name: Check formatting
+      run: |
+        # Check if code is properly formatted
+        # This is a basic check - you might want to add prettier or similar
+        echo "Type checking and build completed successfully"

@@ -1,0 +1,54 @@
+name: Security
+
+on:
+  schedule:
+    # Run weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+        
+    - name: Install dependencies
+      run: bun install
+      
+    - name: Run security audit
+      run: bun audit
+      
+    - name: Check for outdated dependencies
+      run: bun outdated
+      
+    - name: Build and test
+      run: |
+        bun run build
+        bun test
+        
+    - name: Create Dependabot PR
+      if: github.event_name == 'schedule'
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: 'chore: update dependencies'
+        title: 'chore: update dependencies'
+        body: |
+          This PR updates dependencies to their latest versions.
+          
+          - [ ] Tests pass
+          - [ ] No breaking changes
+          - [ ] Security vulnerabilities addressed
+        branch: dependabot/update-dependencies
+        delete-branch: true

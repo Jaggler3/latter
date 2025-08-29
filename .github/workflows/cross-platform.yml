@@ -1,0 +1,51 @@
+name: Cross-Platform Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  cross-platform:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+        
+    - name: Install dependencies
+      run: bun install
+      
+    - name: Build project
+      run: bun run build
+      
+    - name: Run tests
+      run: bun test
+      
+    - name: Test CLI basic functionality
+      run: |
+        ./dist/cli.js --help
+        echo "CLI help command works on ${{ matrix.os }} ✅"
+        
+    - name: Test CLI with SQLite
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        ./dist/cli.js status --database sqlite:./test-cross.db --migrations-dir ./examples/migrations
+        echo "SQLite CLI test passed on ${{ matrix.os }} ✅"
+        
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -f ./test-cross.db
+        echo "Cross-platform test completed on ${{ matrix.os }}"
