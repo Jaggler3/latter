@@ -1,0 +1,14 @@
+[install]
+# Use exact versions for reproducible builds
+exact = true
+
+[install.scopes]
+# Add any scoped packages if needed
+
+[test]
+# Test configuration
+preload = ["./src/test/setup.ts"]
+
+[build]
+# Build configuration
+target = "bun"

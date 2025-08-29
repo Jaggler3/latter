@@ -1,0 +1,48 @@
+{
+  "name": "latter",
+  "version": "0.1.0",
+  "description": "A modern database migration library for Bun",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "latter": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "bun build src/index.ts src/cli.ts --outdir dist --target bun",
+    "dev": "bun --watch src/index.ts",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "bun run clean && bun run build",
+    "cli": "bun src/cli.ts"
+  },
+  "keywords": [
+    "database",
+    "migration",
+    "bun",
+    "sql",
+    "orm"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/pg": "^8.15.5",
+    "bun-types": "latest"
+  },
+  "dependencies": {
+    "mysql2": "^3.6.5",
+    "pg": "^8.11.3"
+  },
+  "peerDependencies": {
+    "bun": ">=1.0.0"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
