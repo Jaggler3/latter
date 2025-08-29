@@ -175,7 +175,8 @@ async function main() {
       verbose: { type: 'boolean' },
       'dry-run': { type: 'boolean' },
       help: { type: 'boolean' }
-    }
+    },
+    allowPositionals: true
   });
 
   if (args.values.help) {
@@ -190,16 +191,25 @@ async function main() {
     process.exit(1);
   }
 
-  if (!args.values.database || !args.values['migrations-dir']) {
-    console.error('❌ --database and --migrations-dir are required');
+  // Only require database and migrations-dir for commands that need them
+  const requiresDatabase = ['migrate', 'rollback', 'status'].includes(command);
+  if (requiresDatabase && (!args.values.database || !args.values['migrations-dir'])) {
+    console.error('❌ --database and --migrations-dir are required for this command');
+    showHelp();
+    process.exit(1);
+  }
+
+  // For create command, only migrations-dir is required
+  if (command === 'create' && !args.values['migrations-dir']) {
+    console.error('❌ --migrations-dir is required for create command');
     showHelp();
     process.exit(1);
   }
 
   const options: CLIOptions = {
-    database: args.values.database,
-    migrationsDir: args.values['migrations-dir'],
-    tableName: args.values['table-name'],
+    database: args.values.database || '',
+    migrationsDir: args.values['migrations-dir'] || '',
+    tableName: args.values['table-name'] || 'latter_migrations',
     verbose: args.values.verbose,
     dryRun: args.values['dry-run']
   };

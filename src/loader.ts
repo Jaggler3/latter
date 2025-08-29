@@ -39,18 +39,31 @@ export class MigrationLoader {
     try {
       const entries = await readdir(this.migrationsDir, { withFileTypes: true });
       const files: MigrationFile[] = [];
+      const processedMigrations = new Set<string>();
 
       for (const entry of entries) {
         if (entry.isFile() && this.isMigrationFile(entry.name)) {
-          const filePath = join(this.migrationsDir, entry.name);
-          const stats = await stat(filePath);
-          
-          files.push({
-            path: filePath,
-            name: entry.name,
-            content: await readFile(filePath, 'utf-8'),
-            timestamp: stats.mtime.getTime()
-          });
+          // Only process _up.sql files to avoid duplicates
+          if (entry.name.includes('_up.sql')) {
+            const baseName = entry.name.replace('_up.sql', '');
+            
+            // Skip if we've already processed this migration
+            if (processedMigrations.has(baseName)) {
+              continue;
+            }
+            
+            const filePath = join(this.migrationsDir, entry.name);
+            const stats = await stat(filePath);
+            
+            files.push({
+              path: filePath,
+              name: entry.name,
+              content: await readFile(filePath, 'utf-8'),
+              timestamp: stats.mtime.getTime()
+            });
+            
+            processedMigrations.add(baseName);
+          }
         }
       }
 

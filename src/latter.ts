@@ -150,7 +150,7 @@ export class Latter {
       if (this.options.verbose) {
         console.error('Error getting migration status:', error);
       }
-      return [];
+      throw error; // Re-throw the error instead of returning empty array
     }
   }
 

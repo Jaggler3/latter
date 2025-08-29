@@ -45,6 +45,7 @@ export class SQLiteAdapter implements DatabaseAdapter {
     try {
       const stmt = this.db.prepare(sql);
       const result = stmt.run(...params);
+      stmt.finalize();
       return result;
     } catch (error) {
       throw new Error(`SQL execution failed: ${error}`);
