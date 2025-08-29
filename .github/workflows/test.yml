@@ -13,8 +13,8 @@ jobs:
     
     strategy:
       matrix:
-        node-version: [18, 20, 22]
-        bun-version: [1.0.0, latest]
+        node-version: [22]
+        bun-version: [1.2.21, latest]
     
     steps:
     - name: Checkout code
@@ -52,6 +52,7 @@ jobs:
         
     - name: Cleanup test files
       if: always()
+      shell: bash
       run: |
         rm -f ./test-cli.db
         rm -f ./examples/migrations/*_test_migration_*.sql

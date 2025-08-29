@@ -166,9 +166,10 @@ bun run build:watch
 This project uses GitHub Actions for continuous integration:
 
 - **Tests**: Runs on every push and pull request across multiple Node.js and Bun versions
-- **Cross-platform**: Tests on Ubuntu, Windows, and macOS
+- **Cross-platform**: Tests on Ubuntu, Windows, and macOS with proper shell handling
 - **Quick feedback**: Fast test runs for immediate feedback
 - **Comprehensive coverage**: Matrix testing for thorough validation
+- **Platform-specific commands**: Uses appropriate shells (bash for Unix, PowerShell for Windows)
 
 ## Contributing
 

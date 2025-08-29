@@ -44,8 +44,16 @@ jobs:
         ./dist/cli.js status --database sqlite:./test-cross.db --migrations-dir ./examples/migrations
         echo "SQLite CLI test passed on ${{ matrix.os }} ✅"
         
-    - name: Cleanup
-      if: always()
+    - name: Cleanup Windows
+      if: matrix.os == 'windows-latest' && always()
+      shell: pwsh
+      run: |
+        Remove-Item -Path "./test-cross.db" -Force -ErrorAction SilentlyContinue
+        echo "Cross-platform test completed on ${{ matrix.os }}"
+        
+    - name: Cleanup Unix
+      if: matrix.os != 'windows-latest' && always()
+      shell: bash
       run: |
         rm -f ./test-cross.db
         echo "Cross-platform test completed on ${{ matrix.os }}"
