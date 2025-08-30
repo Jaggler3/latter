@@ -116,6 +116,10 @@ Latter comes with a powerful command-line interface for managing migrations:
 # Show help
 latter --help
 
+# Initialize a new migration project
+latter init --migrations-dir ./migrations
+latter init --database sqlite:./app.db --migrations-dir ./migrations
+
 # Run pending migrations
 latter migrate --database sqlite:./app.db --migrations-dir ./migrations
 

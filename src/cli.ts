@@ -9,6 +9,8 @@ interface CLIOptions {
   tableName?: string;
   verbose?: boolean;
   dryRun?: boolean;
+  forceSync?: boolean;
+  skipOutOfSync?: boolean;
 }
 
 interface CLICommand {
@@ -18,6 +20,77 @@ interface CLICommand {
 }
 
 const commands: CLICommand[] = [
+  {
+    name: 'init',
+    description: 'Initialize migrations folder and database table',
+    action: async (options: CLIOptions) => {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      
+      try {
+        // Create migrations directory if it doesn't exist
+        const migrationsDir = path.resolve(options.migrationsDir);
+        await fs.mkdir(migrationsDir, { recursive: true });
+        console.log(`✅ Created migrations directory: ${migrationsDir}`);
+        
+        // Create a sample migration file
+        const timestamp = Date.now();
+        const sampleMigrationName = '001_initial_setup';
+        
+        const upContent = `-- Migration: ${sampleMigrationName}
+-- Up: Add your SQL here
+-- Example:
+-- CREATE TABLE example (
+--   id INTEGER PRIMARY KEY,
+--   name TEXT NOT NULL,
+--   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+-- );
+`;
+        
+        const downContent = `-- Migration: ${sampleMigrationName}
+-- Down: Add your rollback SQL here
+-- Example:
+-- DROP TABLE example;
+`;
+        
+        const upPath = path.join(migrationsDir, `${timestamp}_${sampleMigrationName}_up.sql`);
+        const downPath = path.join(migrationsDir, `${timestamp}_${sampleMigrationName}_down.sql`);
+        
+        await fs.writeFile(upPath, upContent);
+        await fs.writeFile(downPath, downContent);
+        
+        console.log(`✅ Created sample migration files:`);
+        console.log(`  - ${upPath}`);
+        console.log(`  - ${downPath}`);
+        
+        // Initialize the database and create migrations table
+        if (options.database) {
+          console.log('\nInitializing database...');
+          const latter = new Latter(options);
+          
+          try {
+            await latter.initialize();
+            console.log('✅ Database initialized successfully');
+            console.log(`✅ Created migrations table: ${options.tableName || 'latter_migrations'}`);
+          } finally {
+            await latter.close();
+          }
+        } else {
+          console.log('\n⚠️  No database specified. Run with --database to initialize the database.');
+        }
+        
+        console.log('\n🎉 Migration system initialized successfully!');
+        console.log('\nNext steps:');
+        console.log('1. Edit the sample migration files with your SQL');
+        console.log('2. Run migrations: latter migrate --database <url> --migrations-dir <path>');
+        console.log('3. Check status: latter status --database <url> --migrations-dir <path>');
+        
+      } catch (error) {
+        console.error(`❌ Initialization failed: ${error}`);
+        process.exit(1);
+      }
+    }
+  },
   {
     name: 'migrate',
     description: 'Run pending migrations',
@@ -138,6 +211,74 @@ const commands: CLICommand[] = [
         process.exit(1);
       }
     }
+  },
+  {
+    name: 'sync',
+    description: 'Synchronize migrations table with migration files',
+    action: async (options: CLIOptions) => {
+      const latter = new Latter(options);
+      
+      try {
+        console.log('Synchronizing migrations table...');
+        
+        // Force sync to clean up orphaned migrations
+        const syncOptions = { ...options, forceSync: true };
+        const syncLatter = new Latter(syncOptions);
+        
+        await syncLatter.initialize();
+        const migrations = await syncLatter.loader.loadMigrations();
+        const appliedMigrations = await syncLatter.adapter.getAppliedMigrations(syncLatter.migrationsTable);
+        
+        // This will handle the sync
+        await syncLatter.handleOutOfSyncMigrations(migrations, appliedMigrations);
+        
+        console.log('✅ Migrations table synchronized successfully');
+        
+        // Show current status
+        const status = await latter.status();
+        if (status.length > 0) {
+          console.log('\nCurrent migration status:');
+          console.log('─'.repeat(80));
+          console.log(`${'Name'.padEnd(30)} ${'Version'.padEnd(10)} ${'Applied'.padEnd(8)} ${'Applied At'.padEnd(20)}`);
+          console.log('─'.repeat(80));
+          
+          status.forEach(migration => {
+            const applied = migration.applied ? '✅' : '⏳';
+            const appliedAt = migration.appliedAt ? migration.appliedAt.toISOString().split('T')[0] : '-';
+            console.log(
+              `${migration.name.padEnd(30)} ${migration.version.padEnd(10)} ${applied.padEnd(8)} ${appliedAt.padEnd(20)}`
+            );
+          });
+        }
+      } finally {
+        await latter.close();
+      }
+    }
+  },
+  {
+    name: 'mark-applied',
+    description: 'Mark a migration as applied without running it',
+    action: async (options: CLIOptions, args: string[]) => {
+      const migrationName = args[0];
+      if (!migrationName) {
+        console.error('❌ Migration name is required');
+        console.log('Usage: latter mark-applied <migration_name>');
+        process.exit(1);
+      }
+
+      const latter = new Latter(options);
+      
+      try {
+        console.log(`Marking migration as applied: ${migrationName}`);
+        await latter.markAsApplied(migrationName);
+        console.log('✅ Migration marked as applied successfully');
+      } catch (error) {
+        console.error(`❌ Failed to mark migration as applied: ${error}`);
+        process.exit(1);
+      } finally {
+        await latter.close();
+      }
+    }
   }
 ];
 
@@ -151,18 +292,37 @@ function showHelp() {
   });
   
   console.log('\nOptions:');
-  console.log('  --database <url>     Database connection string (required)');
-  console.log('  --migrations-dir <path>  Path to migrations directory (required)');
+  console.log('  --database <url>     Database connection string (can also use LATTER_DATABASE_URL env var)');
+  console.log('  --migrations-dir <path>  Path to migrations directory (default: ./migrations)');
   console.log('  --table-name <name>  Custom migrations table name (default: latter_migrations)');
   console.log('  --verbose            Enable verbose output');
   console.log('  --dry-run            Show what would be done without executing');
+  console.log('  --force-sync         Force sync migrations table (remove orphaned entries)');
+  console.log('  --skip-out-of-sync  Skip out-of-sync migration checks');
   console.log('  --help               Show this help message\n');
   
   console.log('Examples:');
-  console.log('  latter migrate --database sqlite:./app.db --migrations-dir ./migrations');
-  console.log('  latter status --database sqlite:./app.db --migrations-dir ./migrations');
-  console.log('  latter rollback 2 --database sqlite:./app.db --migrations-dir ./migrations');
-  console.log('  latter create add_users_table --migrations-dir ./migrations');
+  console.log('  # Initialize a new migration project');
+  console.log('  latter init');
+  console.log('  latter init --database sqlite:./app.db');
+  console.log('  latter init --migrations-dir ./custom-migrations');
+  console.log('  # Or set environment variable: export LATTER_DATABASE_URL="sqlite:./app.db"');
+  console.log('');
+  console.log('  # Run migrations');
+  console.log('  latter migrate --database sqlite:./app.db');
+  console.log('  latter status --database sqlite:./app.db');
+  console.log('  latter rollback 2 --database sqlite:./app.db');
+  console.log('  latter create add_users_table');
+  console.log('');
+  console.log('  # Using environment variable');
+  console.log('  export LATTER_DATABASE_URL="sqlite:./app.db"');
+  console.log('  latter migrate');
+  console.log('');
+  console.log('  # Handle out-of-sync migrations');
+  console.log('  latter sync --database sqlite:./app.db');
+  console.log('  latter migrate --force-sync --database sqlite:./app.db');
+  console.log('  latter migrate --skip-out-of-sync --database sqlite:./app.db');
+  console.log('  latter mark-applied 001_initial_setup --database sqlite:./app.db');
 }
 
 async function main() {
@@ -174,6 +334,8 @@ async function main() {
       'table-name': { type: 'string' },
       verbose: { type: 'boolean' },
       'dry-run': { type: 'boolean' },
+      'force-sync': { type: 'boolean' },
+      'skip-out-of-sync': { type: 'boolean' },
       help: { type: 'boolean' }
     },
     allowPositionals: true
@@ -191,27 +353,25 @@ async function main() {
     process.exit(1);
   }
 
-  // Only require database and migrations-dir for commands that need them
-  const requiresDatabase = ['migrate', 'rollback', 'status'].includes(command);
-  if (requiresDatabase && (!args.values.database || !args.values['migrations-dir'])) {
-    console.error('❌ --database and --migrations-dir are required for this command');
-    showHelp();
-    process.exit(1);
-  }
-
-  // For create command, only migrations-dir is required
-  if (command === 'create' && !args.values['migrations-dir']) {
-    console.error('❌ --migrations-dir is required for create command');
+  // Only require database for commands that need them
+  const requiresDatabase = ['migrate', 'rollback', 'status', 'sync', 'mark-applied'].includes(command);
+  
+  // Check for database URL from args or environment variable
+  const databaseUrl = args.values.database || process.env.LATTER_DATABASE_URL;
+  if (requiresDatabase && !databaseUrl) {
+    console.error('❌ --database is required or set LATTER_DATABASE_URL environment variable');
     showHelp();
     process.exit(1);
   }
 
   const options: CLIOptions = {
-    database: args.values.database || '',
-    migrationsDir: args.values['migrations-dir'] || '',
+    database: databaseUrl || '',
+    migrationsDir: args.values['migrations-dir'] || './migrations',
     tableName: args.values['table-name'] || 'latter_migrations',
     verbose: args.values.verbose,
-    dryRun: args.values['dry-run']
+    dryRun: args.values['dry-run'],
+    forceSync: args.values['force-sync'],
+    skipOutOfSync: args.values['skip-out-of-sync']
   };
 
   const cmd = commands.find(c => c.name === command);

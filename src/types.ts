@@ -35,6 +35,8 @@ export interface LatterOptions {
   adapter?: DatabaseAdapter;
   dryRun?: boolean;
   verbose?: boolean;
+  forceSync?: boolean;
+  skipOutOfSync?: boolean;
 }
 
 export interface DatabaseAdapter {

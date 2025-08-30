@@ -236,6 +236,24 @@ export default {
 
 ### Commands
 
+#### `init`
+
+Initialize a new migration project:
+
+```bash
+# Initialize just the folder structure
+latter init --migrations-dir ./migrations
+
+# Initialize folder structure and database
+latter init --database sqlite:./app.db --migrations-dir ./migrations
+```
+
+This command:
+- Creates the migrations directory
+- Generates sample migration files
+- Optionally initializes the database and creates the migrations table
+- Provides helpful next steps
+
 #### `migrate`
 
 Run pending migrations:

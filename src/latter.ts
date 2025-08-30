@@ -8,10 +8,10 @@ import { MySQLAdapter } from './adapters/mysql';
 
 export class Latter {
   private options: LatterOptions;
-  private adapter: DatabaseAdapter;
-  private runner: MigrationRunner;
-  private loader: MigrationLoader;
-  private migrationsTable: string;
+  public adapter: DatabaseAdapter;
+  public runner: MigrationRunner;
+  public loader: MigrationLoader;
+  public migrationsTable: string;
 
   constructor(options: LatterOptions) {
     this.options = {
@@ -61,6 +61,9 @@ export class Latter {
       
       const migrations = await this.loader.loadMigrations();
       const appliedMigrations = await this.adapter.getAppliedMigrations(this.migrationsTable);
+      
+      // Handle out-of-sync migrations before proceeding
+      await this.handleOutOfSyncMigrations(migrations, appliedMigrations);
       
       const pendingMigrations = this.getPendingMigrations(migrations, appliedMigrations);
       
@@ -142,6 +145,15 @@ export class Latter {
       const migrations = await this.loader.loadMigrations();
       const appliedMigrations = await this.adapter.getAppliedMigrations(this.migrationsTable);
       
+      // Check for out-of-sync migrations but don't fail
+      try {
+        await this.handleOutOfSyncMigrations(migrations, appliedMigrations);
+      } catch (error) {
+        if (this.options.verbose) {
+          console.log(`⚠️  Out-of-sync migrations detected: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      
       return migrations.map(migration => {
         const applied = appliedMigrations.find(am => am.name === migration.name);
         return migration.toStatus(!!applied, applied?.appliedAt);
@@ -163,6 +175,72 @@ export class Latter {
     return migrations
       .filter(migration => !appliedNames.has(migration.name))
       .sort((a, b) => a.timestamp - b.timestamp);
+  }
+
+  /**
+   * Check for out-of-sync migrations and handle them based on options
+   */
+  public async handleOutOfSyncMigrations(migrations: Migration[], appliedMigrations: MigrationStatus[]): Promise<void> {
+    const appliedNames = new Set(appliedMigrations.map(am => am.name));
+    const fileNames = new Set(migrations.map(m => m.name));
+    
+    // Find migrations that exist in database but not in files
+    const orphanedMigrations = appliedMigrations.filter(am => !fileNames.has(am.name));
+    
+    if (orphanedMigrations.length > 0) {
+      if (this.options.verbose) {
+        console.log(`⚠️  Found ${orphanedMigrations.length} migration(s) in database but not in files:`);
+        orphanedMigrations.forEach(m => console.log(`    - ${m.name}`));
+      }
+      
+      if (this.options.forceSync) {
+        // Remove orphaned migrations from database
+        if (this.options.verbose) {
+          console.log('🗑️  Removing orphaned migrations from database...');
+        }
+        for (const orphaned of orphanedMigrations) {
+          await this.adapter.markMigrationRolledBack(orphaned, this.migrationsTable);
+        }
+        if (this.options.verbose) {
+          console.log('✅ Orphaned migrations removed from database');
+        }
+      } else if (this.options.skipOutOfSync) {
+        if (this.options.verbose) {
+          console.log('⏭️  Skipping orphaned migrations (skip-out-of-sync enabled)');
+        }
+      } else {
+        throw new Error(
+          `Found ${orphanedMigrations.length} migration(s) in database but not in files. ` +
+          `Use --force-sync to remove them or --skip-out-of-sync to ignore them. ` +
+          `Orphaned migrations: ${orphanedMigrations.map(m => m.name).join(', ')}`
+        );
+      }
+    }
+  }
+
+  /**
+   * Mark a migration as applied without running it (useful for manual migrations)
+   */
+  async markAsApplied(migrationName: string): Promise<void> {
+    try {
+      await this.initialize();
+      
+      const migrations = await this.loader.loadMigrations();
+      const migration = migrations.find(m => m.name === migrationName);
+      
+      if (!migration) {
+        throw new Error(`Migration not found: ${migrationName}`);
+      }
+      
+      const status = migration.toStatus(true, new Date());
+      await this.adapter.markMigrationApplied(status, this.migrationsTable);
+      
+      if (this.options.verbose) {
+        console.log(`✅ Marked migration as applied: ${migrationName}`);
+      }
+    } catch (error) {
+      throw error;
+    }
   }
 
   /**
