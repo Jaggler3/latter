@@ -68,18 +68,11 @@ export class Latter {
       const pendingMigrations = this.getPendingMigrations(migrations, appliedMigrations);
       
       if (pendingMigrations.length === 0) {
-        if (this.options.verbose) {
-          console.log('No pending migrations to run');
-        }
         return { success: true, migrationsApplied: [] };
       }
 
       const result = await this.runner.runMigrations(pendingMigrations, this.options.dryRun);
       
-      if (this.options.verbose) {
-        console.log(`Applied ${result.migrationsApplied.length} migrations`);
-      }
-
       return result;
     } catch (error) {
       return {
