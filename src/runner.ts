@@ -33,7 +33,7 @@ export class MigrationRunner {
 
         // Execute the migration
         await this.adapter.execute(migration.up);
-        
+
         // Mark it as applied
         const status = migration.toStatus(true, new Date());
         await this.adapter.markMigrationApplied(status, this.migrationsTable);

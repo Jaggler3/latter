@@ -53,13 +53,24 @@ export class MigrationLoader {
             }
             
             const filePath = join(this.migrationsDir, entry.name);
-            const stats = await stat(filePath);
+            
+            // Extract timestamp from filename (format: timestamp_name_up.sql)
+            const timestampMatch = baseName.match(/^(\d+)_(.+)$/);
+            let timestamp: number;
+            
+            if (timestampMatch) {
+              timestamp = parseInt(timestampMatch[1]);
+            } else {
+              // Fallback to file modification time if no timestamp in filename
+              const stats = await stat(filePath);
+              timestamp = stats.mtime.getTime();
+            }
             
             files.push({
               path: filePath,
               name: entry.name,
               content: await readFile(filePath, 'utf-8'),
-              timestamp: stats.mtime.getTime()
+              timestamp: timestamp
             });
             
             processedMigrations.add(baseName);
@@ -121,11 +132,22 @@ export class MigrationLoader {
       const upContent = await readFile(upFile, 'utf-8');
       const downContent = await readFile(downFile, 'utf-8');
 
+      // Extract timestamp from filename (format: timestamp_name)
+      const timestampMatch = baseName.match(/^(\d+)_(.+)$/);
+      let timestamp: number;
+      
+      if (timestampMatch) {
+        timestamp = parseInt(timestampMatch[1]);
+      } else {
+        // Fallback to file timestamp if no timestamp in filename
+        timestamp = file.timestamp;
+      }
+      
       return new Migration({
         name: baseName,
         up: upContent.trim(),
         down: downContent.trim(),
-        timestamp: file.timestamp
+        timestamp: timestamp
       });
     } catch (error) {
       console.warn(`Failed to read SQL migration files for ${baseName}:`, error);

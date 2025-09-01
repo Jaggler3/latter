@@ -1,16 +1,17 @@
-import { DatabaseAdapter, MigrationStatus } from '../types';
+import { DatabaseAdapter, LatterOptions, MigrationStatus } from '../types';
 import { Database } from 'bun:sqlite';
 
 export class SQLiteAdapter implements DatabaseAdapter {
   public name = 'sqlite';
-  public verbose = false;
   public isConnected = false;
   private db: Database | null = null;
   private dbPath: string;
+  private options: LatterOptions;
 
-  constructor(databaseUrl: string) {
+  constructor(databaseUrl: string, options?: LatterOptions) {
     // Extract path from sqlite:path format
     this.dbPath = databaseUrl.replace('sqlite:', '');
+    this.options = options || { database: databaseUrl, migrationsDir: './migrations', verbose: false };
   }
 
   async connect(): Promise<void> {
@@ -18,7 +19,7 @@ export class SQLiteAdapter implements DatabaseAdapter {
       this.db = new Database(this.dbPath);
       this.db.run('PRAGMA foreign_keys = ON');
       this.isConnected = true;
-      if (this.verbose) {
+      if (this.options.verbose) {
         console.log(`Connected to SQLite database: ${this.dbPath}`);
       }
     } catch (error) {
@@ -31,7 +32,7 @@ export class SQLiteAdapter implements DatabaseAdapter {
       this.db.close();
       this.db = null;
       this.isConnected = false;
-      if (this.verbose) {
+      if (this.options.verbose) {
         console.log('Disconnected from SQLite database');
       }
     }
@@ -100,7 +101,7 @@ export class SQLiteAdapter implements DatabaseAdapter {
         )
       `);
       
-      if (this.verbose) {
+      if (this.options.verbose) {
         console.log(`Created migrations table: ${tableName}`);
       }
     }

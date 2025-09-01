@@ -30,38 +30,41 @@ const commands: CLICommand[] = [
       try {
         // Create migrations directory if it doesn't exist
         const migrationsDir = path.resolve(options.migrationsDir);
-        await fs.mkdir(migrationsDir, { recursive: true });
-        console.log(`✅ Created migrations directory: ${migrationsDir}`);
-        
-        // Create a sample migration file
-        const timestamp = Date.now();
-        const sampleMigrationName = '001_initial_setup';
-        
-        const upContent = `-- Migration: ${sampleMigrationName}
+
+        // check if the migrations directory exists
+        if (await fs.stat(migrationsDir).then(stat => stat.isDirectory())) {
+          console.log(`✅ Migrations directory already exists: ${migrationsDir}`);
+        } else {
+          await fs.mkdir(migrationsDir, { recursive: true });
+          console.log(`✅ Created migrations directory: ${migrationsDir}`);
+          // Create a sample migration file
+          const timestamp = Date.now();
+          const sampleMigrationName = '001_initial_setup';
+          
+          const upContent = `-- Migration: ${sampleMigrationName}
 -- Up: Add your SQL here
 -- Example:
 -- CREATE TABLE example (
 --   id INTEGER PRIMARY KEY,
 --   name TEXT NOT NULL,
 --   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
--- );
-`;
-        
-        const downContent = `-- Migration: ${sampleMigrationName}
+-- );`;
+          
+          const downContent = `-- Migration: ${sampleMigrationName}
 -- Down: Add your rollback SQL here
 -- Example:
--- DROP TABLE example;
-`;
-        
-        const upPath = path.join(migrationsDir, `${timestamp}_${sampleMigrationName}_up.sql`);
-        const downPath = path.join(migrationsDir, `${timestamp}_${sampleMigrationName}_down.sql`);
-        
-        await fs.writeFile(upPath, upContent);
-        await fs.writeFile(downPath, downContent);
-        
-        console.log(`✅ Created sample migration files:`);
-        console.log(`  - ${upPath}`);
-        console.log(`  - ${downPath}`);
+-- DROP TABLE example;`;
+          
+          const upPath = path.join(migrationsDir, `${timestamp}_${sampleMigrationName}_up.sql`);
+          const downPath = path.join(migrationsDir, `${timestamp}_${sampleMigrationName}_down.sql`);
+          
+          await fs.writeFile(upPath, upContent);
+          await fs.writeFile(downPath, downContent);
+          
+          console.log(`✅ Created sample migration files:`);
+          console.log(`  - ${upPath}`);
+          console.log(`  - ${downPath}`);
+      }
         
         // Initialize the database and create migrations table
         if (options.database) {
@@ -159,15 +162,15 @@ const commands: CLICommand[] = [
         }
         
         console.log('Migration Status:');
-        console.log('─'.repeat(80));
-        console.log(`${'Name'.padEnd(30)} ${'Version'.padEnd(10)} ${'Applied'.padEnd(8)} ${'Applied At'.padEnd(20)}`);
-        console.log('─'.repeat(80));
+        console.log('─'.repeat(100));
+        console.log(`${'Name'.padEnd(50)} ${'Version'.padEnd(10)} ${'Applied'.padEnd(8)} ${'Applied At'.padEnd(20)}`);
+        console.log('─'.repeat(100));
         
         status.forEach(migration => {
           const applied = migration.applied ? '✅' : '⏳';
           const appliedAt = migration.appliedAt ? migration.appliedAt.toISOString().split('T')[0] : '-';
           console.log(
-            `${migration.name.padEnd(30)} ${migration.version.padEnd(10)} ${applied.padEnd(8)} ${appliedAt.padEnd(20)}`
+            `${migration.name.padEnd(50)} ${migration.version.padEnd(10)} ${applied.padEnd(8)} ${appliedAt.padEnd(20)}`
           );
         });
       } finally {
@@ -238,15 +241,15 @@ const commands: CLICommand[] = [
         const status = await latter.status();
         if (status.length > 0) {
           console.log('\nCurrent migration status:');
-          console.log('─'.repeat(80));
-          console.log(`${'Name'.padEnd(30)} ${'Version'.padEnd(10)} ${'Applied'.padEnd(8)} ${'Applied At'.padEnd(20)}`);
-          console.log('─'.repeat(80));
+          console.log('─'.repeat(100));
+          console.log(`${'Name'.padEnd(50)} ${'Version'.padEnd(10)} ${'Applied'.padEnd(8)} ${'Applied At'.padEnd(20)}`);
+          console.log('─'.repeat(100));
           
           status.forEach(migration => {
             const applied = migration.applied ? '✅' : '⏳';
             const appliedAt = migration.appliedAt ? migration.appliedAt.toISOString().split('T')[0] : '-';
             console.log(
-              `${migration.name.padEnd(30)} ${migration.version.padEnd(10)} ${applied.padEnd(8)} ${appliedAt.padEnd(20)}`
+              `${migration.name.padEnd(50)} ${migration.version.padEnd(10)} ${applied.padEnd(8)} ${appliedAt.padEnd(20)}`
             );
           });
         }

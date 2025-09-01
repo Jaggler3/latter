@@ -34,11 +34,11 @@ export class Latter {
     const dbUrl = this.options.database;
     
     if (dbUrl.startsWith('sqlite:')) {
-      return new SQLiteAdapter(dbUrl);
+      return new SQLiteAdapter(dbUrl, this.options);
     } else if (dbUrl.startsWith('postgresql:') || dbUrl.startsWith('postgres:')) {
-      return new PostgresAdapter(dbUrl);
+      return new PostgresAdapter(dbUrl, this.options);
     } else if (dbUrl.startsWith('mysql:')) {
-      return new MySQLAdapter(dbUrl);
+      return new MySQLAdapter(dbUrl, this.options);
     }
     
     throw new Error(`No adapter available for database: ${dbUrl}. Please provide a custom adapter or use a supported database URL format.`);

@@ -42,6 +42,7 @@ export interface LatterOptions {
 export interface DatabaseAdapter {
   name: string;
   isConnected: boolean;
+  // Constructor should accept (databaseUrl: string, options?: LatterOptions)
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   execute(sql: string, params?: any[]): Promise<any>;

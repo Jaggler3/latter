@@ -1,16 +1,17 @@
-import { DatabaseAdapter, MigrationStatus } from '../types';
+import { DatabaseAdapter, LatterOptions, MigrationStatus } from '../types';
 import { Pool, PoolClient } from 'pg';
 
 export class PostgresAdapter implements DatabaseAdapter {
   public name = 'postgres';
-  public verbose = false;
   public isConnected = false;
   private pool: Pool | null = null;
   private poolClient: PoolClient | null = null;
   private connectionString: string;
+  private options: LatterOptions;
 
-  constructor(databaseUrl: string) {
+  constructor(databaseUrl: string, options?: LatterOptions) {
     this.connectionString = databaseUrl;
+    this.options = options || { database: databaseUrl, migrationsDir: './migrations', verbose: false };
   }
 
   async connect(): Promise<void> {
@@ -26,7 +27,7 @@ export class PostgresAdapter implements DatabaseAdapter {
       // Test the connection
       this.poolClient = await this.pool.connect();
       
-      if (this.verbose) {
+      if (this.options.verbose) {
         console.log('Connected to PostgreSQL database');
       }
       this.isConnected = true;
@@ -48,7 +49,7 @@ export class PostgresAdapter implements DatabaseAdapter {
         this.isConnected = false;
       }
       
-      if (this.verbose) {
+      if (this.options.verbose) {
         console.log('Disconnected from PostgreSQL database');
       }
     } catch (error) {
@@ -120,7 +121,7 @@ export class PostgresAdapter implements DatabaseAdapter {
 
   async tableExists(tableName: string): Promise<boolean> {
     const result = await this.query(
-      "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)",
+      "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1)",
       [tableName]
     );
     return result[0]?.exists || false;
@@ -130,7 +131,7 @@ export class PostgresAdapter implements DatabaseAdapter {
     const exists = await this.tableExists(tableName);
     if (!exists) {
       await this.execute(`
-        CREATE TABLE ${tableName} (
+        CREATE TABLE public."${tableName}" (
           id SERIAL PRIMARY KEY,
           name VARCHAR(255) NOT NULL UNIQUE,
           version VARCHAR(255) NOT NULL,
@@ -140,15 +141,16 @@ export class PostgresAdapter implements DatabaseAdapter {
         )
       `);
       
-      if (this.verbose) {
-        console.log(`Created migrations table: ${tableName}`);
+    } else {
+      if (this.options.verbose) {
+        console.log(`✅ Migrations table already exists: ${tableName}`);
       }
     }
   }
 
   async getAppliedMigrations(tableName: string): Promise<MigrationStatus[]> {
     const rows = await this.query(
-      `SELECT name, version, timestamp, applied_at, checksum FROM ${tableName} ORDER BY timestamp ASC`
+      `SELECT name, version, timestamp, applied_at, checksum FROM public."${tableName}" ORDER BY timestamp ASC`
     );
 
     return rows.map(row => ({
@@ -163,14 +165,14 @@ export class PostgresAdapter implements DatabaseAdapter {
 
   async markMigrationApplied(migration: MigrationStatus, tableName: string): Promise<void> {
     await this.execute(
-      `INSERT INTO ${tableName} (name, version, timestamp, checksum) VALUES ($1, $2, $3, $4)`,
+      `INSERT INTO public."${tableName}" (name, version, timestamp, checksum) VALUES ($1, $2, $3, $4)`,
       [migration.name, migration.version, migration.timestamp, migration.checksum]
     );
   }
 
   async markMigrationRolledBack(migration: MigrationStatus, tableName: string): Promise<void> {
     await this.execute(
-      `DELETE FROM ${tableName} WHERE name = $1`,
+      `DELETE FROM public."${tableName}" WHERE name = $1`,
       [migration.name]
     );
   }

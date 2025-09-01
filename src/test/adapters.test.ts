@@ -8,7 +8,11 @@ describe('Database Adapters', () => {
     let adapter: SQLiteAdapter;
 
     beforeEach(() => {
-      adapter = new SQLiteAdapter(`:memory:`);
+      adapter = new SQLiteAdapter(`:memory:`, {
+        database: ':memory:',
+        migrationsDir: './migrations',
+        verbose: false
+      });
     });
 
     afterEach(async () => {

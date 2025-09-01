@@ -1,15 +1,16 @@
-import { DatabaseAdapter, MigrationStatus } from '../types';
+import { DatabaseAdapter, LatterOptions, MigrationStatus } from '../types';
 import { createConnection, Connection, ConnectionOptions } from 'mysql2/promise';
 
 export class MySQLAdapter implements DatabaseAdapter {
   public name = 'mysql';
-  public verbose = false;
   public isConnected = false;
   private connection: Connection | null = null;
   private connectionOptions: ConnectionOptions;
-
-  constructor(databaseUrl: string) {
+  private options: LatterOptions;
+  
+  constructor(databaseUrl: string, options?: LatterOptions) {
     this.connectionOptions = this.parseConnectionString(databaseUrl);
+    this.options = options || { database: databaseUrl, migrationsDir: './migrations', verbose: false };
   }
 
   private parseConnectionString(url: string): ConnectionOptions {
@@ -40,7 +41,7 @@ export class MySQLAdapter implements DatabaseAdapter {
       await this.connection.execute('SET SESSION sql_mode = "STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO"');
       await this.connection.execute('SET SESSION time_zone = "+00:00"');
       
-      if (this.verbose) {
+      if (this.options.verbose) {
         console.log('Connected to MySQL database');
       }
     } catch (error) {
@@ -54,7 +55,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         await this.connection.end();
         this.connection = null;
         
-        if (this.verbose) {
+        if (this.options.verbose) {
           console.log('Disconnected from MySQL database');
         }
         this.isConnected = false;
@@ -150,7 +151,7 @@ export class MySQLAdapter implements DatabaseAdapter {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
       
-      if (this.verbose) {
+      if (this.options.verbose) {
         console.log(`Created migrations table: ${tableName}`);
       }
     }
