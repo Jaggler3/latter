@@ -2,9 +2,9 @@
 
 A modern, fast database migration library built for Bun.
 
-[![Tests](https://github.com/yourusername/latter/workflows/Tests/badge.svg)](https://github.com/yourusername/latter/actions)
-[![Quick Tests](https://github.com/yourusername/latter/workflows/Quick%20Tests/badge.svg)](https://github.com/yourusername/latter/actions)
-[![Cross-Platform](https://github.com/yourusername/latter/workflows/Cross-Platform%20Tests/badge.svg)](https://github.com/yourusername/latter/actions)
+[![Tests](https://github.com/Jaggler3/latter/workflows/Tests/badge.svg)](https://github.com/Jaggler3/latter/actions)
+[![Quick Tests](https://github.com/Jaggler3/latter/workflows/Quick%20Tests/badge.svg)](https://github.com/Jaggler3/latter/actions)
+[![Cross-Platform](https://github.com/Jaggler3/latter/workflows/Cross-Platform%20Tests/badge.svg)](https://github.com/Jaggler3/latter/actions)
 
 ## Features
 
