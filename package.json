@@ -32,7 +32,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@types/pg": "^8.15.5",
+    "@types/pg": "^8.15.6",
     "bun-types": "latest"
   },
   "dependencies": {
