@@ -19,7 +19,7 @@ A modern, fast database migration library built for Bun.
 ## Installation
 
 ```bash
-bun add latter
+bun add @jaggler3/latter
 ```
 
 ## Quick Start

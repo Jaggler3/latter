@@ -1,5 +1,5 @@
 {
-  "name": "latter",
+  "name": "@jaggler3/latter",
   "version": "0.1.0",
   "description": "A modern database migration library for Bun",
   "main": "dist/index.js",
