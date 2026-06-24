@@ -23,7 +23,7 @@ Latter now supports multiple database engines with automatic adapter detection a
 ### 3. MySQL (Fully Implemented)
 - **Connection String**: `mysql://username:password@host:port/database`
 - **Features**:
-  - Native MySQL connection handling
+  - Connection pooling for better performance
   - Session configuration for compatibility
   - UTF8MB4 charset support
   - Optimized for MySQL best practices
@@ -196,12 +196,11 @@ bun test test/adapters.test.ts
 1. **Connection Management**: Always call `latter.close()` to properly close database connections
 2. **Error Handling**: Wrap migration operations in try-catch blocks
 3. **Environment Variables**: Use environment variables for database credentials in production
-4. **Connection Pooling**: PostgreSQL adapter automatically handles connection pooling
+4. **Connection Pooling**: PostgreSQL and MySQL adapters automatically handle connection pooling
 5. **Transactions**: All migrations run within transactions for data consistency
 
 ## Future Enhancements
 
-- Connection pooling for MySQL
 - Support for additional database engines (MongoDB, Redis, etc.)
 - Migration dependency resolution
 - Parallel migration execution

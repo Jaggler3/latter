@@ -137,7 +137,7 @@ const adapter = new MySQLAdapter('mysql://user:pass@localhost/db');
 ```
 
 **Features:**
-- Native MySQL connection handling
+- Connection pooling for better performance
 - Session configuration for compatibility
 - UTF8MB4 charset support
 - Connection string parsing
