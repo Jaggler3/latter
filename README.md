@@ -13,6 +13,7 @@ A modern, fast database migration library built for Bun.
 - 🗄️ **Database agnostic**: Support for multiple database engines
 - 📝 **Migration tracking**: Automatic migration state management
 - 🔄 **Rollback support**: Easy rollback to previous versions
+- ⚙️ **Config file**: Zero-flag workflow via `latter.config.ts` / `latter.json`
 - 🧪 **Testing friendly**: Built-in testing utilities
 
 ## Installation
@@ -110,36 +111,61 @@ class Latter {
 
 ## CLI Usage
 
-Latter comes with a powerful command-line interface for managing migrations:
+Latter comes with a powerful command-line interface for managing migrations.
+
+### Configuration
+
+Instead of passing flags on every command, create a **`latter.config.ts`** (or `latter.config.js` / `latter.json`) in your project root:
+
+```typescript
+// latter.config.ts
+import type { LatterConfig } from 'latter';
+
+const config: LatterConfig = {
+  database: 'sqlite:./app.db', // connection string
+  migrationsDir: './migrations',
+  // tableName: 'latter_migrations', // optional
+};
+
+export default config;
+```
+
+Configuration is resolved in this priority order:
+1. **CLI flags** — `--database`, `--migrations-dir`, …
+2. **Environment variable** — `LATTER_DATABASE_URL`
+3. **Config file** — `latter.config.ts` (searched from cwd upward)
+
+### Commands
 
 ```bash
+# Initialize a new project — generates latter.config.ts + sample migration
+latter init
+latter init --database sqlite:./app.db
+
+# With a config file in place, no flags needed:
+latter migrate
+latter status
+latter rollback 2
+latter create add_users_table
+
+# Override config values on the fly:
+latter migrate --database postgres://localhost/prod
+latter migrate --migrations-dir ./other-migrations
+
+# Dry run (show what would happen without executing)
+latter migrate --dry-run
+
+# Verbose output
+latter migrate --verbose
+
+# Advanced sync commands
+latter sync
+latter migrate --force-sync
+latter migrate --skip-out-of-sync
+latter mark-applied 001_initial_setup
+
 # Show help
 latter --help
-
-# Initialize a new migration project
-latter init --migrations-dir ./migrations
-latter init --database sqlite:./app.db --migrations-dir ./migrations
-
-# Run pending migrations
-latter migrate --database sqlite:./app.db --migrations-dir ./migrations
-
-# Show migration status
-latter status --database sqlite:./app.db --migrations-dir ./migrations
-
-# Rollback the last N migrations
-latter rollback 2 --database sqlite:./app.db --migrations-dir ./migrations
-
-# Create a new migration
-latter create add_users_table --migrations-dir ./migrations
-
-# Use custom table name
-latter migrate --database sqlite:./app.db --migrations-dir ./migrations --table-name custom_migrations
-
-# Enable verbose output
-latter migrate --database sqlite:./app.db --migrations-dir ./migrations --verbose
-
-# Dry run (show what would be done)
-latter migrate --database sqlite:./app.db --migrations-dir ./migrations --dry-run
 ```
 
 ## Development
