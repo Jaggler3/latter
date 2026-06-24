@@ -1,6 +1,6 @@
 {
   "name": "@jaggler3/latter",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A modern database migration library for Bun",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
