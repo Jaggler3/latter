@@ -2,6 +2,7 @@
 
 import { Latter } from './latter';
 import { parseArgs } from 'node:util';
+import { findConfig } from './config';
 
 interface CLIOptions {
   database: string;
@@ -64,8 +65,38 @@ const commands: CLICommand[] = [
           console.log(`✅ Created sample migration files:`);
           console.log(`  - ${upPath}`);
           console.log(`  - ${downPath}`);
-      }
-        
+        }
+
+        // Generate a latter.config.ts stub if one doesn't already exist
+        const configPath = path.join(process.cwd(), 'latter.config.ts');
+        try {
+          await fs.access(configPath);
+          console.log(`\n✅ Config file already exists: ${configPath}`);
+        } catch {
+          const configContent = `import type { LatterConfig } from 'latter';
+
+const config: LatterConfig = {
+  // Database connection string.
+  // You can also set the LATTER_DATABASE_URL environment variable instead.
+  database: '${options.database || 'sqlite:./app.db'}',
+
+  // Path to your migrations directory.
+  migrationsDir: '${options.migrationsDir || './migrations'}',
+
+  // Name of the migrations tracking table (default: 'latter_migrations').
+  // tableName: 'latter_migrations',
+
+  // Uncomment to enable verbose output by default.
+  // verbose: true,
+};
+
+export default config;
+`;
+          await fs.writeFile(configPath, configContent);
+          console.log(`\n✅ Created config file: ${configPath}`);
+          console.log('   Edit it to set your database URL and other defaults.');
+        }
+
         // Initialize the database and create migrations table
         if (options.database) {
           console.log('\nInitializing database...');
@@ -79,14 +110,15 @@ const commands: CLICommand[] = [
             await latter.close();
           }
         } else {
-          console.log('\n⚠️  No database specified. Run with --database to initialize the database.');
+          console.log('\n⚠️  No database specified. Set "database" in latter.config.ts or pass --database.');
         }
         
         console.log('\n🎉 Migration system initialized successfully!');
         console.log('\nNext steps:');
-        console.log('1. Edit the sample migration files with your SQL');
-        console.log('2. Run migrations: latter migrate --database <url> --migrations-dir <path>');
-        console.log('3. Check status: latter status --database <url> --migrations-dir <path>');
+        console.log('1. Edit latter.config.ts with your database URL');
+        console.log('2. Edit the sample migration files with your SQL');
+        console.log('3. Run migrations: latter migrate');
+        console.log('4. Check status:   latter status');
         
       } catch (error) {
         console.error(`❌ Initialization failed: ${error}`);
@@ -295,37 +327,47 @@ function showHelp() {
   });
   
   console.log('\nOptions:');
-  console.log('  --database <url>     Database connection string (can also use LATTER_DATABASE_URL env var)');
-  console.log('  --migrations-dir <path>  Path to migrations directory (default: ./migrations)');
-  console.log('  --table-name <name>  Custom migrations table name (default: latter_migrations)');
-  console.log('  --verbose            Enable verbose output');
-  console.log('  --dry-run            Show what would be done without executing');
-  console.log('  --force-sync         Force sync migrations table (remove orphaned entries)');
-  console.log('  --skip-out-of-sync  Skip out-of-sync migration checks');
-  console.log('  --help               Show this help message\n');
-  
+  console.log('  --database <url>        Database connection string');
+  console.log('  --migrations-dir <path> Path to migrations directory (default: ./migrations)');
+  console.log('  --table-name <name>     Custom migrations table name (default: latter_migrations)');
+  console.log('  --verbose               Enable verbose output');
+  console.log('  --dry-run               Show what would be done without executing');
+  console.log('  --force-sync            Force sync migrations table (remove orphaned entries)');
+  console.log('  --skip-out-of-sync      Skip out-of-sync migration checks');
+  console.log('  --help                  Show this help message\n');
+
+  console.log('Configuration (in priority order):');
+  console.log('  1. CLI flags             --database <url>  --migrations-dir <path>  ...');
+  console.log('  2. Environment variable  LATTER_DATABASE_URL');
+  console.log('  3. Config file           latter.config.ts | latter.config.js | latter.json');
+  console.log('                           (searched from cwd upward)\n');
+  console.log('  Example latter.config.ts:');
+  console.log('    import type { LatterConfig } from \'latter\';');
+  console.log('    const config: LatterConfig = {');
+  console.log('      database: \'sqlite:./app.db\',');
+  console.log('      migrationsDir: \'./migrations\',');
+  console.log('    };');
+  console.log('    export default config;\n');
+
   console.log('Examples:');
-  console.log('  # Initialize a new migration project');
+  console.log('  # Initialize a new project (generates latter.config.ts + sample migration)');
   console.log('  latter init');
   console.log('  latter init --database sqlite:./app.db');
-  console.log('  latter init --migrations-dir ./custom-migrations');
-  console.log('  # Or set environment variable: export LATTER_DATABASE_URL="sqlite:./app.db"');
   console.log('');
-  console.log('  # Run migrations');
-  console.log('  latter migrate --database sqlite:./app.db');
-  console.log('  latter status --database sqlite:./app.db');
-  console.log('  latter rollback 2 --database sqlite:./app.db');
+  console.log('  # With a config file in place, no flags needed:');
+  console.log('  latter migrate');
+  console.log('  latter status');
+  console.log('  latter rollback 2');
   console.log('  latter create add_users_table');
   console.log('');
-  console.log('  # Using environment variable');
-  console.log('  export LATTER_DATABASE_URL="sqlite:./app.db"');
-  console.log('  latter migrate');
+  console.log('  # Override config file values with flags:');
+  console.log('  latter migrate --database postgres://localhost/prod');
   console.log('');
   console.log('  # Handle out-of-sync migrations');
-  console.log('  latter sync --database sqlite:./app.db');
-  console.log('  latter migrate --force-sync --database sqlite:./app.db');
-  console.log('  latter migrate --skip-out-of-sync --database sqlite:./app.db');
-  console.log('  latter mark-applied 001_initial_setup --database sqlite:./app.db');
+  console.log('  latter sync');
+  console.log('  latter migrate --force-sync');
+  console.log('  latter migrate --skip-out-of-sync');
+  console.log('  latter mark-applied 001_initial_setup');
 }
 
 async function main() {
@@ -356,25 +398,54 @@ async function main() {
     process.exit(1);
   }
 
-  // Only require database for commands that need them
+  // ------------------------------------------------------------------
+  // Resolve configuration (priority: CLI flags > env var > config file)
+  // ------------------------------------------------------------------
+  let fileConfig: Record<string, any> = {};
+  try {
+    const found = await findConfig();
+    if (found) {
+      fileConfig = found.config as Record<string, any>;
+      if (args.values.verbose || fileConfig.verbose) {
+        console.log(`📄 Loaded config: ${found.filePath}`);
+      }
+    }
+  } catch (err) {
+    console.error(`⚠️  Could not load config file: ${err}`);
+  }
+
+  // Env var takes precedence over config file but not over CLI flag
+  const databaseUrl =
+    args.values.database ||
+    process.env.LATTER_DATABASE_URL ||
+    fileConfig.database;
+
+  // Only require database for commands that need a DB connection
   const requiresDatabase = ['migrate', 'rollback', 'status', 'sync', 'mark-applied'].includes(command);
-  
-  // Check for database URL from args or environment variable
-  const databaseUrl = args.values.database || process.env.LATTER_DATABASE_URL;
   if (requiresDatabase && !databaseUrl) {
-    console.error('❌ --database is required or set LATTER_DATABASE_URL environment variable');
-    showHelp();
+    console.error(
+      '❌ No database configured. Provide one via:\n' +
+      '   • latter.config.ts  →  database: \'<url>\'\n' +
+      '   • Environment var   →  LATTER_DATABASE_URL=<url>\n' +
+      '   • CLI flag          →  --database <url>'
+    );
     process.exit(1);
   }
 
   const options: CLIOptions = {
     database: databaseUrl || '',
-    migrationsDir: args.values['migrations-dir'] || './migrations',
-    tableName: args.values['table-name'] || 'latter_migrations',
-    verbose: args.values.verbose,
-    dryRun: args.values['dry-run'],
-    forceSync: args.values['force-sync'],
-    skipOutOfSync: args.values['skip-out-of-sync']
+    migrationsDir:
+      args.values['migrations-dir'] ??
+      fileConfig.migrationsDir ??
+      './migrations',
+    tableName:
+      args.values['table-name'] ??
+      fileConfig.tableName ??
+      'latter_migrations',
+    verbose:        args.values.verbose        ?? fileConfig.verbose,
+    dryRun:         args.values['dry-run']     ?? fileConfig.dryRun,
+    forceSync:      args.values['force-sync']  ?? fileConfig.forceSync,
+    skipOutOfSync:  args.values['skip-out-of-sync'] ?? fileConfig.skipOutOfSync,
   };
 
   const cmd = commands.find(c => c.name === command);

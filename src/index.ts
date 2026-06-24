@@ -12,6 +12,10 @@ export { MySQLAdapter } from './adapters/mysql';
 export { MigrationRunner } from './runner';
 export { MigrationLoader } from './loader';
 
+// Configuration
+export { findConfig } from './config';
+export type { LatterConfig } from './config';
+
 // Types
 export type {
   DatabaseAdapter,
