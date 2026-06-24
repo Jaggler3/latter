@@ -1,11 +1,12 @@
 import { DatabaseAdapter, LatterOptions, MigrationStatus } from '../types';
-import { createConnection, Connection, ConnectionOptions } from 'mysql2/promise';
+import { createPool, Pool, PoolOptions, PoolConnection } from 'mysql2/promise';
 
 export class MySQLAdapter implements DatabaseAdapter {
   public name = 'mysql';
   public isConnected = false;
-  private connection: Connection | null = null;
-  private connectionOptions: ConnectionOptions;
+  private pool: Pool | null = null;
+  private connection: PoolConnection | null = null;
+  private connectionOptions: PoolOptions;
   private options: LatterOptions;
   
   constructor(databaseUrl: string, options?: LatterOptions) {
@@ -13,7 +14,7 @@ export class MySQLAdapter implements DatabaseAdapter {
     this.options = options || { database: databaseUrl, migrationsDir: './migrations', verbose: false };
   }
 
-  private parseConnectionString(url: string): ConnectionOptions {
+  private parseConnectionString(url: string): PoolOptions {
     try {
       // Parse mysql://user:password@host:port/database format
       const urlObj = new URL(url);
@@ -35,7 +36,8 @@ export class MySQLAdapter implements DatabaseAdapter {
 
   async connect(): Promise<void> {
     try {
-      this.connection = await createConnection(this.connectionOptions);
+      this.pool = createPool(this.connectionOptions);
+      this.connection = await this.pool.getConnection();
       this.isConnected = true;
       // Set session variables for better compatibility
       await this.connection.execute('SET SESSION sql_mode = "STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO"');
@@ -52,13 +54,18 @@ export class MySQLAdapter implements DatabaseAdapter {
   async disconnect(): Promise<void> {
     try {
       if (this.connection && this.isConnected) {
-        await this.connection.end();
+        this.connection.release();
         this.connection = null;
-        
-        if (this.options.verbose) {
-          console.log('Disconnected from MySQL database');
-        }
+      }
+      
+      if (this.pool) {
+        await this.pool.end();
+        this.pool = null;
         this.isConnected = false;
+      }
+        
+      if (this.options.verbose) {
+        console.log('Disconnected from MySQL database');
       }
     } catch (error) {
       console.error('Error disconnecting from MySQL:', error);
