@@ -26661,6 +26661,7 @@ var import_promise = __toESM(require_promise(), 1);
 class MySQLAdapter {
   name = "mysql";
   isConnected = false;
+  pool = null;
   connection = null;
   connectionOptions;
   options;
@@ -26687,7 +26688,8 @@ class MySQLAdapter {
   }
   async connect() {
     try {
-      this.connection = await import_promise.createConnection(this.connectionOptions);
+      this.pool = import_promise.createPool(this.connectionOptions);
+      this.connection = await this.pool.getConnection();
       this.isConnected = true;
       await this.connection.execute('SET SESSION sql_mode = "STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO"');
       await this.connection.execute('SET SESSION time_zone = "+00:00"');
@@ -26701,12 +26703,16 @@ class MySQLAdapter {
   async disconnect() {
     try {
       if (this.connection && this.isConnected) {
-        await this.connection.end();
+        this.connection.release();
         this.connection = null;
-        if (this.options.verbose) {
-          console.log("Disconnected from MySQL database");
-        }
+      }
+      if (this.pool) {
+        await this.pool.end();
+        this.pool = null;
         this.isConnected = false;
+      }
+      if (this.options.verbose) {
+        console.log("Disconnected from MySQL database");
       }
     } catch (error) {
       console.error("Error disconnecting from MySQL:", error);
@@ -26969,7 +26975,47 @@ class Latter {
     await this.adapter.disconnect();
   }
 }
+// src/config.ts
+import path from "path";
+import fs from "fs/promises";
+var CONFIG_FILES = [
+  "latter.config.ts",
+  "latter.config.js",
+  "latter.json"
+];
+async function findConfig(startDir = process.cwd()) {
+  let dir = path.resolve(startDir);
+  while (true) {
+    for (const filename of CONFIG_FILES) {
+      const candidate = path.join(dir, filename);
+      try {
+        await fs.access(candidate);
+      } catch {
+        continue;
+      }
+      try {
+        if (filename.endsWith(".json")) {
+          const raw = await fs.readFile(candidate, "utf-8");
+          const parsed = JSON.parse(raw);
+          return { config: parsed, filePath: candidate };
+        } else {
+          const imported = await import(candidate);
+          const config = imported.default ?? imported;
+          return { config, filePath: candidate };
+        }
+      } catch (err) {
+        throw new Error(`Failed to load config from ${candidate}: ${err}`);
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return null;
+    }
+    dir = parent;
+  }
+}
 export {
+  findConfig,
   SQLiteAdapter,
   PostgresAdapter,
   MySQLAdapter,

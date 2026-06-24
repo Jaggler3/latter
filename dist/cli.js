@@ -26662,6 +26662,7 @@ var import_promise = __toESM(require_promise(), 1);
 class MySQLAdapter {
   name = "mysql";
   isConnected = false;
+  pool = null;
   connection = null;
   connectionOptions;
   options;
@@ -26688,7 +26689,8 @@ class MySQLAdapter {
   }
   async connect() {
     try {
-      this.connection = await import_promise.createConnection(this.connectionOptions);
+      this.pool = import_promise.createPool(this.connectionOptions);
+      this.connection = await this.pool.getConnection();
       this.isConnected = true;
       await this.connection.execute('SET SESSION sql_mode = "STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO"');
       await this.connection.execute('SET SESSION time_zone = "+00:00"');
@@ -26702,12 +26704,16 @@ class MySQLAdapter {
   async disconnect() {
     try {
       if (this.connection && this.isConnected) {
-        await this.connection.end();
+        this.connection.release();
         this.connection = null;
-        if (this.options.verbose) {
-          console.log("Disconnected from MySQL database");
-        }
+      }
+      if (this.pool) {
+        await this.pool.end();
+        this.pool = null;
         this.isConnected = false;
+      }
+      if (this.options.verbose) {
+        console.log("Disconnected from MySQL database");
       }
     } catch (error) {
       console.error("Error disconnecting from MySQL:", error);
@@ -26973,19 +26979,61 @@ class Latter {
 
 // src/cli.ts
 import { parseArgs } from "util";
+
+// src/config.ts
+import path from "path";
+import fs from "fs/promises";
+var CONFIG_FILES = [
+  "latter.config.ts",
+  "latter.config.js",
+  "latter.json"
+];
+async function findConfig(startDir = process.cwd()) {
+  let dir = path.resolve(startDir);
+  while (true) {
+    for (const filename of CONFIG_FILES) {
+      const candidate = path.join(dir, filename);
+      try {
+        await fs.access(candidate);
+      } catch {
+        continue;
+      }
+      try {
+        if (filename.endsWith(".json")) {
+          const raw = await fs.readFile(candidate, "utf-8");
+          const parsed = JSON.parse(raw);
+          return { config: parsed, filePath: candidate };
+        } else {
+          const imported = await import(candidate);
+          const config = imported.default ?? imported;
+          return { config, filePath: candidate };
+        }
+      } catch (err) {
+        throw new Error(`Failed to load config from ${candidate}: ${err}`);
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return null;
+    }
+    dir = parent;
+  }
+}
+
+// src/cli.ts
 var commands = [
   {
     name: "init",
     description: "Initialize migrations folder and database table",
     action: async (options) => {
-      const fs = await import("fs/promises");
-      const path = await import("path");
+      const fs2 = await import("fs/promises");
+      const path2 = await import("path");
       try {
-        const migrationsDir = path.resolve(options.migrationsDir);
-        if (await fs.stat(migrationsDir).then((stat2) => stat2.isDirectory())) {
+        const migrationsDir = path2.resolve(options.migrationsDir);
+        if (await fs2.stat(migrationsDir).then((stat2) => stat2.isDirectory())) {
           console.log(`\u2705 Migrations directory already exists: ${migrationsDir}`);
         } else {
-          await fs.mkdir(migrationsDir, { recursive: true });
+          await fs2.mkdir(migrationsDir, { recursive: true });
           console.log(`\u2705 Created migrations directory: ${migrationsDir}`);
           const timestamp = Date.now();
           const sampleMigrationName = "001_initial_setup";
@@ -27001,13 +27049,43 @@ var commands = [
 -- Down: Add your rollback SQL here
 -- Example:
 -- DROP TABLE example;`;
-          const upPath = path.join(migrationsDir, `${timestamp}_${sampleMigrationName}_up.sql`);
-          const downPath = path.join(migrationsDir, `${timestamp}_${sampleMigrationName}_down.sql`);
-          await fs.writeFile(upPath, upContent);
-          await fs.writeFile(downPath, downContent);
+          const upPath = path2.join(migrationsDir, `${timestamp}_${sampleMigrationName}_up.sql`);
+          const downPath = path2.join(migrationsDir, `${timestamp}_${sampleMigrationName}_down.sql`);
+          await fs2.writeFile(upPath, upContent);
+          await fs2.writeFile(downPath, downContent);
           console.log(`\u2705 Created sample migration files:`);
           console.log(`  - ${upPath}`);
           console.log(`  - ${downPath}`);
+        }
+        const configPath = path2.join(process.cwd(), "latter.config.ts");
+        try {
+          await fs2.access(configPath);
+          console.log(`
+\u2705 Config file already exists: ${configPath}`);
+        } catch {
+          const configContent = `import type { LatterConfig } from 'latter';
+
+const config: LatterConfig = {
+  // Database connection string.
+  // You can also set the LATTER_DATABASE_URL environment variable instead.
+  database: '${options.database || "sqlite:./app.db"}',
+
+  // Path to your migrations directory.
+  migrationsDir: '${options.migrationsDir || "./migrations"}',
+
+  // Name of the migrations tracking table (default: 'latter_migrations').
+  // tableName: 'latter_migrations',
+
+  // Uncomment to enable verbose output by default.
+  // verbose: true,
+};
+
+export default config;
+`;
+          await fs2.writeFile(configPath, configContent);
+          console.log(`
+\u2705 Created config file: ${configPath}`);
+          console.log("   Edit it to set your database URL and other defaults.");
         }
         if (options.database) {
           console.log(`
@@ -27022,15 +27100,16 @@ Initializing database...`);
           }
         } else {
           console.log(`
-\u26A0\uFE0F  No database specified. Run with --database to initialize the database.`);
+\u26A0\uFE0F  No database specified. Set "database" in latter.config.ts or pass --database.`);
         }
         console.log(`
 \uD83C\uDF89 Migration system initialized successfully!`);
         console.log(`
 Next steps:`);
-        console.log("1. Edit the sample migration files with your SQL");
-        console.log("2. Run migrations: latter migrate --database <url> --migrations-dir <path>");
-        console.log("3. Check status: latter status --database <url> --migrations-dir <path>");
+        console.log("1. Edit latter.config.ts with your database URL");
+        console.log("2. Edit the sample migration files with your SQL");
+        console.log("3. Run migrations: latter migrate");
+        console.log("4. Check status:   latter status");
       } catch (error) {
         console.error(`\u274C Initialization failed: ${error}`);
         process.exit(1);
@@ -27122,20 +27201,20 @@ Next steps:`);
         process.exit(1);
       }
       const timestamp = Date.now();
-      const fs = await import("fs/promises");
-      const path = await import("path");
+      const fs2 = await import("fs/promises");
+      const path2 = await import("path");
       try {
         const migrationsDir = options.migrationsDir;
         const upContent = `-- Migration: ${name}
 -- Up: Add your SQL here
 `;
-        const upPath = path.join(migrationsDir, `${timestamp}_${name}_up.sql`);
-        await fs.writeFile(upPath, upContent);
+        const upPath = path2.join(migrationsDir, `${timestamp}_${name}_up.sql`);
+        await fs2.writeFile(upPath, upContent);
         const downContent = `-- Migration: ${name}
 -- Down: Add your rollback SQL here
 `;
-        const downPath = path.join(migrationsDir, `${timestamp}_${name}_down.sql`);
-        await fs.writeFile(downPath, downContent);
+        const downPath = path2.join(migrationsDir, `${timestamp}_${name}_down.sql`);
+        await fs2.writeFile(downPath, downContent);
         console.log(`\u2705 Created migration files:`);
         console.log(`  - ${upPath}`);
         console.log(`  - ${downPath}`);
@@ -27212,37 +27291,48 @@ function showHelp() {
   });
   console.log(`
 Options:`);
-  console.log("  --database <url>     Database connection string (can also use LATTER_DATABASE_URL env var)");
-  console.log("  --migrations-dir <path>  Path to migrations directory (default: ./migrations)");
-  console.log("  --table-name <name>  Custom migrations table name (default: latter_migrations)");
-  console.log("  --verbose            Enable verbose output");
-  console.log("  --dry-run            Show what would be done without executing");
-  console.log("  --force-sync         Force sync migrations table (remove orphaned entries)");
-  console.log("  --skip-out-of-sync  Skip out-of-sync migration checks");
-  console.log(`  --help               Show this help message
+  console.log("  --database <url>        Database connection string");
+  console.log("  --migrations-dir <path> Path to migrations directory (default: ./migrations)");
+  console.log("  --table-name <name>     Custom migrations table name (default: latter_migrations)");
+  console.log("  --verbose               Enable verbose output");
+  console.log("  --dry-run               Show what would be done without executing");
+  console.log("  --force-sync            Force sync migrations table (remove orphaned entries)");
+  console.log("  --skip-out-of-sync      Skip out-of-sync migration checks");
+  console.log(`  --help                  Show this help message
+`);
+  console.log("Configuration (in priority order):");
+  console.log("  1. CLI flags             --database <url>  --migrations-dir <path>  ...");
+  console.log("  2. Environment variable  LATTER_DATABASE_URL");
+  console.log("  3. Config file           latter.config.ts | latter.config.js | latter.json");
+  console.log(`                           (searched from cwd upward)
+`);
+  console.log("  Example latter.config.ts:");
+  console.log("    import type { LatterConfig } from 'latter';");
+  console.log("    const config: LatterConfig = {");
+  console.log("      database: 'sqlite:./app.db',");
+  console.log("      migrationsDir: './migrations',");
+  console.log("    };");
+  console.log(`    export default config;
 `);
   console.log("Examples:");
-  console.log("  # Initialize a new migration project");
+  console.log("  # Initialize a new project (generates latter.config.ts + sample migration)");
   console.log("  latter init");
   console.log("  latter init --database sqlite:./app.db");
-  console.log("  latter init --migrations-dir ./custom-migrations");
-  console.log('  # Or set environment variable: export LATTER_DATABASE_URL="sqlite:./app.db"');
   console.log("");
-  console.log("  # Run migrations");
-  console.log("  latter migrate --database sqlite:./app.db");
-  console.log("  latter status --database sqlite:./app.db");
-  console.log("  latter rollback 2 --database sqlite:./app.db");
+  console.log("  # With a config file in place, no flags needed:");
+  console.log("  latter migrate");
+  console.log("  latter status");
+  console.log("  latter rollback 2");
   console.log("  latter create add_users_table");
   console.log("");
-  console.log("  # Using environment variable");
-  console.log('  export LATTER_DATABASE_URL="sqlite:./app.db"');
-  console.log("  latter migrate");
+  console.log("  # Override config file values with flags:");
+  console.log("  latter migrate --database postgres://localhost/prod");
   console.log("");
   console.log("  # Handle out-of-sync migrations");
-  console.log("  latter sync --database sqlite:./app.db");
-  console.log("  latter migrate --force-sync --database sqlite:./app.db");
-  console.log("  latter migrate --skip-out-of-sync --database sqlite:./app.db");
-  console.log("  latter mark-applied 001_initial_setup --database sqlite:./app.db");
+  console.log("  latter sync");
+  console.log("  latter migrate --force-sync");
+  console.log("  latter migrate --skip-out-of-sync");
+  console.log("  latter mark-applied 001_initial_setup");
 }
 async function main() {
   const args = parseArgs({
@@ -27269,21 +27359,35 @@ async function main() {
     showHelp();
     process.exit(1);
   }
+  let fileConfig = {};
+  try {
+    const found = await findConfig();
+    if (found) {
+      fileConfig = found.config;
+      if (args.values.verbose || fileConfig.verbose) {
+        console.log(`\uD83D\uDCC4 Loaded config: ${found.filePath}`);
+      }
+    }
+  } catch (err) {
+    console.error(`\u26A0\uFE0F  Could not load config file: ${err}`);
+  }
+  const databaseUrl = args.values.database || process.env.LATTER_DATABASE_URL || fileConfig.database;
   const requiresDatabase = ["migrate", "rollback", "status", "sync", "mark-applied"].includes(command);
-  const databaseUrl = args.values.database || process.env.LATTER_DATABASE_URL;
   if (requiresDatabase && !databaseUrl) {
-    console.error("\u274C --database is required or set LATTER_DATABASE_URL environment variable");
-    showHelp();
+    console.error(`\u274C No database configured. Provide one via:
+` + `   \u2022 latter.config.ts  \u2192  database: '<url>'
+` + `   \u2022 Environment var   \u2192  LATTER_DATABASE_URL=<url>
+` + "   \u2022 CLI flag          \u2192  --database <url>");
     process.exit(1);
   }
   const options = {
     database: databaseUrl || "",
-    migrationsDir: args.values["migrations-dir"] || "./migrations",
-    tableName: args.values["table-name"] || "latter_migrations",
-    verbose: args.values.verbose,
-    dryRun: args.values["dry-run"],
-    forceSync: args.values["force-sync"],
-    skipOutOfSync: args.values["skip-out-of-sync"]
+    migrationsDir: args.values["migrations-dir"] ?? fileConfig.migrationsDir ?? "./migrations",
+    tableName: args.values["table-name"] ?? fileConfig.tableName ?? "latter_migrations",
+    verbose: args.values.verbose ?? fileConfig.verbose,
+    dryRun: args.values["dry-run"] ?? fileConfig.dryRun,
+    forceSync: args.values["force-sync"] ?? fileConfig.forceSync,
+    skipOutOfSync: args.values["skip-out-of-sync"] ?? fileConfig.skipOutOfSync
   };
   const cmd = commands.find((c) => c.name === command);
   if (!cmd) {
